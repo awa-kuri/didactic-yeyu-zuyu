@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1d3337">
+<meta name="mobile-web-app-capable" content="yes">
+<title>手湯</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --yudoko: #1d3337;   /* 湯底：画面の地 */
+  --yumen: #2b474c;    /* 湯面：押せる面 */
+  --fuchi: #3d5d62;    /* 湯船の縁：線 */
+  --hinoki: #eadbbb;   /* 檜：本文の字 */
+  --yuge: #a9c2bd;     /* 湯気：控えめな字 */
+  --yuzu: #e8c547;     /* 柚子：今の動き */
+  --yuzu-in: #f6e9b5;  /* 柚子の果肉 */
+  --yuzu-ink: #3a3010; /* 柚子の上の字 */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--yudoko);
+  color: var(--hinoki);
+  font-family:"Kiwi Maru", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", "Droid Sans Japanese", sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100vh;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--yumen);
+  border: 2px solid var(--fuchi);
+  border-radius: 14px;
+  cursor: pointer;
+}
+button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
+.screen { display: none; padding: 20px 16px 28px; max-width: 520px; margin: 0 auto; }
+.screen.on { display: block; }
+
+/* ---- 支度の画面 ---- */
+.title { margin: 8px 0 2px; font-size: 40px; font-weight: 200; letter-spacing: 0.12em; }
+.lead { margin: 0 0 22px; color: var(--yuge); }
+.stages { margin: 0 0 18px; padding: 0; list-style: none; }
+.stage {
+  display: block; width: 100%; text-align: left;
+  padding: 14px 16px; margin-bottom: 10px;
+  background: transparent;
+}
+.stage .head { display: block; font-size: 22px; font-weight: 700; }
+.stage .when { display: block; color: var(--yuge); font-size: 16px; }
+.stage .what { display: block; font-size: 16px; margin-top: 4px; }
+.stage[aria-pressed="true"] { background: var(--yumen); border-color: var(--yuzu); }
+.stage[aria-pressed="true"] .head { color: var(--yuzu); }
+.start {
+  display: block; width: 100%; padding: 20px 0; margin: 6px 0 8px;
+  font-size: 26px; font-weight: 700;
+  background: var(--yuzu); color: var(--yuzu-ink); border-color: var(--yuzu);
+}
+.total { text-align: center; color: var(--yuge); margin: 0 0 22px; font-size: 16px; }
+.toggles { display: -webkit-box; display: flex; margin: 0 -5px 20px; }
+.toggle { -webkit-box-flex: 1; flex: 1; margin: 0 5px; padding: 12px 6px; font-size: 17px; background: transparent; }
+.toggle[aria-pressed="true"] { background: var(--yumen); }
+.toggle .mark { display: inline-block; width: 1.2em; }
+.rule {
+  border-left: 4px solid var(--fuchi);
+  padding: 2px 0 2px 14px; margin: 0 0 16px; color: var(--yuge); font-size: 16px;
+}
+.rule b { color: var(--hinoki); font-weight: 700; }
+.last { color: var(--yuge); font-size: 15px; margin: 0; }
+
+/* ---- 手順の画面 ---- */
+#play { padding-top: 12px; }
+.topline { display: -webkit-box; display: flex; -webkit-box-align: center; align-items: center; margin-bottom: 8px; }
+.topline .where { -webkit-box-flex: 1; flex: 1; color: var(--yuge); font-size: 16px; }
+.quit { padding: 8px 14px; font-size: 16px; background: transparent; }
+.item { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.3; }
+.note { margin: 4px 0 0; min-height: 1.6em; color: var(--yuge); font-size: 18px; }
+.yuzu-wrap { position: relative; width: 78vw; max-width: 340px; margin: 14px auto 6px; }
+.yuzu-wrap:before { content: ""; display: block; padding-top: 100%; }
+.yuzu { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.ring-bg { fill: none; stroke: var(--yumen); stroke-width: 12; }
+.ring { fill: none; stroke: var(--yuzu); stroke-width: 12; stroke-linecap: round; }
+.flesh { fill: var(--yuzu-in); }
+.flesh.rest { fill: var(--yumen); }
+.segs line { stroke: #efdf98; stroke-width: 2; }
+.segs.rest line { stroke: var(--fuchi); }
+.face {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  display: -webkit-box; display: flex; -webkit-box-orient: vertical; flex-direction: column;
+  -webkit-box-pack: center; justify-content: center; -webkit-box-align: center; align-items: center;
+  text-align: center; color: var(--yuzu-ink);
+}
+.face.rest { color: var(--hinoki); }
+.phase { font-size: 48px; font-weight: 700; line-height: 1.15; padding: 0 8%; white-space: nowrap; }
+.secs { font-size: 30px; font-weight: 700; margin-top: 4px; }
+.count { text-align: center; font-size: 26px; font-weight: 700; margin: 4px 0 2px; }
+.count small { font-size: 18px; font-weight: 700; color: var(--yuge); }
+.after { text-align: center; color: var(--yuge); font-size: 16px; min-height: 1.6em; margin: 0 0 14px; }
+.controls { display: -webkit-box; display: flex; margin: 0 -5px; }
+.controls button { -webkit-box-flex: 1; flex: 1; margin: 0 5px; padding: 22px 0; font-size: 22px; font-weight: 700; }
+.controls .pause { -webkit-box-flex: 1.4; flex: 1.4; }
+.paused .ring { stroke: var(--yuge); }
+
+/* ---- 済んだ画面 ---- */
+#done { text-align: center; padding-top: 60px; }
+.done-mark { width: 120px; height: 120px; margin: 0 auto 18px; }
+.done-title { font-size: 32px; font-weight: 700; margin: 0 0 8px; }
+.done-text { color: var(--yuge); margin: 0 0 30px; }
+.done-text b { color: var(--hinoki); }
+.home { display: block; width: 100%; padding: 18px 0; font-size: 22px; font-weight: 700; }
+
+@media (max-height: 640px) {
+  .yuzu-wrap { width: 64vw; }
+  .phase { font-size: 40px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 支度 -->
+<section id="setup" class="screen on">
+  <h1 class="title">手湯</h1>
+  <p class="lead">湯船で、左の手首を動かす手順</p>
+
+  <ul class="stages" id="stages"></ul>
+
+  <button class="start" id="startBtn" type="button">始める</button>
+  <p class="total" id="total"></p>
+
+  <div class="toggles">
+    <button class="toggle" id="soundBtn" type="button" aria-pressed="true"><span class="mark"></span>合図の音</button>
+    <button class="toggle" id="voiceBtn" type="button" aria-pressed="false"><span class="mark"></span>声で読む</button>
+  </div>
+
+  <p class="rule">やっている最中の痛みは「気になる程度」まで。<br><b>翌朝の手首が悪くなっていなければ合格。</b>響いたら一段戻す。</p>
+  <p class="last" id="last"></p>
+</section>
+
+<!-- 手順 -->
+<section id="play" class="screen">
+  <div class="topline">
+    <span class="where" id="where"></span>
+    <button class="quit" id="quitBtn" type="button">やめる</button>
+  </div>
+  <h2 class="item" id="item"></h2>
+  <p class="note" id="note"></p>
+
+  <div class="yuzu-wrap" id="yuzuWrap">
+    <svg class="yuzu" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="ring-bg" cx="100" cy="100" r="92"></circle>
+      <circle class="flesh" id="flesh" cx="100" cy="100" r="80"></circle>
+      <g class="segs" id="segs"></g>
+      <circle class="ring" id="ring" cx="100" cy="100" r="92" transform="rotate(-90 100 100)"></circle>
+    </svg>
+    <div class="face" id="face" aria-live="polite">
+      <div class="phase" id="phase"></div>
+      <div class="secs" id="secs"></div>
+    </div>
+  </div>
+
+  <p class="count" id="count"></p>
+  <p class="after" id="after"></p>
+
+  <div class="controls">
+    <button type="button" id="prevBtn">戻る</button>
+    <button type="button" id="pauseBtn" class="pause">止める</button>
+    <button type="button" id="nextBtn">次へ</button>
+  </div>
+</section>
+
+<!-- 済んだ -->
+<section id="done" class="screen">
+  <svg class="done-mark" viewBox="0 0 120 120" aria-hidden="true">
+    <circle cx="60" cy="60" r="50" fill="#e8c547"></circle>
+    <circle cx="60" cy="60" r="42" fill="#f6e9b5"></circle>
+    <path d="M38 61 L53 76 L83 45" fill="none" stroke="#3a3010" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+  <p class="done-title">今日の分は済んだ</p>
+  <p class="done-text">湯から上がったら、そのまま休めてよい。<br><b>明日の朝、手首の具合を見ておくこと。</b></p>
+  <button class="home" id="homeBtn" type="button">最初の画面へ</button>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 手順の中身 ---------- */
+  // phases: [言葉, 秒]
+  var BLOCK_MOVE = [
+    { name: "指の握り・開き", note: "ゆっくり。血を巡らせるだけ",
+      sets: [{ reps: 10, phases: [["握る", 2], ["開く", 2]] }] },
+    { name: "手首の曲げ・反らし", note: "手のひら側へ曲げ、甲の側へ反らす",
+      sets: [{ reps: 10, phases: [["曲げる", 3], ["戻す", 2], ["反らす", 3], ["戻す", 2]] }] },
+    { name: "手首の横振り", note: "痛まない幅だけ。親指側は控えめに",
+      sets: [{ reps: 10, phases: [["親指側へ", 3], ["戻す", 2], ["小指側へ", 3], ["戻す", 2]] }] },
+    { name: "手のひらの返し", note: "肘は体の横に軽くつけたまま",
+      sets: [{ reps: 10, phases: [["上へ返す", 2], ["下へ返す", 2]] }] },
+    { name: "親指の円", note: "小さな円でよい",
+      sets: [
+        { label: "前回し", reps: 5, phases: [["前へ回す", 3]] },
+        { label: "後回し", reps: 5, phases: [["後ろへ回す", 3]] }
+      ] }
+  ];
+  var BLOCK_PRESS = [
+    { name: "親指を開く向きへ押す", note: "右手で押さえ、関節は動かさない。力は半分",
+      sets: [{ reps: 5, phases: [["押す", 5], ["ゆるめる", 5]] }] },
+    { name: "親指を反らす向きへ押す", note: "右手で押さえ、関節は動かさない。力は半分",
+      sets: [{ reps: 5, phases: [["押す", 5], ["ゆるめる", 5]] }] }
+  ];
+  var BLOCK_LOAD = [
+    { name: "輪ゴムで指を開く", note: "指に輪ゴムを二、三本かけて",
+      sets: [
+        { reps: 15, phases: [["開く", 2], ["閉じる", 2]], rest: 30 },
+        { reps: 15, phases: [["開く", 2], ["閉じる", 2]] }
+      ] },
+    { name: "瓶を親指側へ上げる", note: "下ろす方を、ゆっくり三つ数えて",
+      sets: [
+        { reps: 10, phases: [["上げる", 2], ["下ろす", 3]], rest: 30 },
+        { reps: 10, phases: [["上げる", 2], ["下ろす", 3]] }
+      ] }
+  ];
+
+  var STAGES = [
+    { head: "一段目　動かす", when: "今", what: "握り、曲げ反らし、横振り、返し、親指の円",
+      blocks: [BLOCK_MOVE] },
+    { head: "二段目　動かさずに押す", when: "朝の痛みが消えたら", what: "一段目のあとに、親指を押し返す二つ",
+      blocks: [BLOCK_MOVE, BLOCK_PRESS] },
+    { head: "三段目　軽い重さで動かす", when: "二段目が楽になったら", what: "二段目のあとに、輪ゴムと瓶",
+      blocks: [BLOCK_MOVE, BLOCK_PRESS, BLOCK_LOAD] }
+  ];
+
+  var READY_SECS = 5;
+
+  /* ---------- 覚え書き（この端末だけ） ---------- */
+  function load(key, fallback) {
+    try { var v = localStorage.getItem("teyu." + key); return v === null ? fallback : JSON.parse(v); }
+    catch (e) { return fallback; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem("teyu." + key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  var settings = {
+    stage: load("stage", 0),
+    sound: load("sound", true),
+    voice: load("voice", false)
+  };
+  if (!(settings.stage >= 0 && settings.stage < STAGES.length)) settings.stage = 0;
+
+  /* ---------- 手順を一列に並べる ---------- */
+  function buildSteps(stageIdx) {
+    var items = [];
+    STAGES[stageIdx].blocks.forEach(function (b) { items = items.concat(b); });
+    var steps = [];
+    items.forEach(function (it, ii) {
+      steps.push({ kind: "ready", item: ii, items: items.length, it: it, label: "支度", dur: READY_SECS });
+      it.sets.forEach(function (set, si) {
+        for (var r = 1; r <= set.reps; r++) {
+          set.phases.forEach(function (ph, pi) {
+            steps.push({ kind: "move", item: ii, items: items.length, it: it, set: set, setIdx: si,
+              sets: it.sets.length, rep: r, reps: set.reps, label: ph[0], dur: ph[1], first: pi === 0 });
+          });
+        }
+        if (set.rest && si < it.sets.length - 1) {
+          steps.push({ kind: "rest", item: ii, items: items.length, it: it, set: set, setIdx: si,
+            sets: it.sets.length, label: "休む", dur: set.rest });
+        }
+      });
+    });
+    return steps;
+  }
+  function totalSecs(steps) { var t = 0; steps.forEach(function (s) { t += s.dur; }); return t; }
+  function minutesText(sec) {
+    var m = Math.round(sec / 60);
+    return m < 1 ? "一分足らず" : "およそ" + m + "分";
+  }
+
+  /* ---------- 音と声 ---------- */
+  var actx = null;
+  function ensureAudio() {
+    if (actx) return;
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (C) { try { actx = new C(); } catch (e) { actx = null; } }
+  }
+  function tone(freq, len, vol) {
+    if (!settings.sound || !actx) return;
+    try {
+      var t = actx.currentTime;
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = "sine"; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.25, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t + len + 0.05);
+    } catch (e) {}
+  }
+  function chime() { tone(660, 0.35, 0.22); setTimeout(function () { tone(880, 0.5, 0.2); }, 180); }
+  var jaVoice = null;
+  function pickVoice() {
+    if (!window.speechSynthesis) return;
+    var vs = window.speechSynthesis.getVoices() || [];
+    for (var i = 0; i < vs.length; i++) { if (/^ja/i.test(vs[i].lang)) { jaVoice = vs[i]; break; } }
+  }
+  if (window.speechSynthesis) {
+    pickVoice();
+    if ("onvoiceschanged" in window.speechSynthesis) window.speechSynthesis.onvoiceschanged = pickVoice;
+  }
+  function say(text) {
+    if (!settings.voice || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = "ja-JP"; if (jaVoice) u.voice = jaVoice; u.rate = 1.0;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  /* ---------- 画面を消さない ---------- */
+  var wakeLock = null;
+  function holdScreen() {
+    if (!("wakeLock" in navigator)) return;
+    try {
+      navigator.wakeLock.request("screen").then(function (l) { wakeLock = l; }).catch(function () {});
+    } catch (e) {}
+  }
+  function releaseScreen() {
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && player.running) holdScreen();
+  });
+
+  /* ---------- 画面の部品 ---------- */
+  function $(id) { return document.getElementById(id); }
+  function show(id) {
+    ["setup", "play", "done"].forEach(function (s) { $(s).className = "screen" + (s === id ? " on" : ""); });
+    window.scrollTo(0, 0);
+  }
+  var RING_LEN = 2 * Math.PI * 92;
+  $("ring").setAttribute("stroke-dasharray", RING_LEN.toFixed(1));
+
+  // 柚子の房
+  (function drawSegs() {
+    var g = $("segs"), n = 10, svgns = "http://www.w3.org/2000/svg";
+    for (var i = 0; i < n; i++) {
+      var a = (i / n) * Math.PI * 2;
+      var l = document.createElementNS(svgns, "line");
+      l.setAttribute("x1", 100 + Math.cos(a) * 14); l.setAttribute("y1", 100 + Math.sin(a) * 14);
+      l.setAttribute("x2", 100 + Math.cos(a) * 76); l.setAttribute("y2", 100 + Math.sin(a) * 76);
+      g.appendChild(l);
+    }
+  })();
+
+  /* ---------- 支度の画面 ---------- */
+  function renderSetup() {
+    var ul = $("stages"); ul.innerHTML = "";
+    STAGES.forEach(function (st, i) {
+      var li = document.createElement("li");
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "stage";
+      b.setAttribute("aria-pressed", i === settings.stage ? "true" : "false");
+      b.innerHTML = '<span class="head"></span><span class="when"></span><span class="what"></span>';
+      b.querySelector(".head").textContent = st.head;
+      b.querySelector(".when").textContent = st.when;
+      b.querySelector(".what").textContent = st.what;
+      b.addEventListener("click", function () { settings.stage = i; save("stage", i); renderSetup(); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+    $("total").textContent = "通して" + minutesText(totalSecs(buildSteps(settings.stage)));
+    setToggle($("soundBtn"), settings.sound);
+    setToggle($("voiceBtn"), settings.voice);
+    var last = load("last", null);
+    $("last").textContent = last ? "前に済ませた日：" + last.date + "（" + STAGES[last.stage].head.split("　")[0] + "）" : "";
+  }
+  function setToggle(btn, on) {
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.querySelector(".mark").textContent = on ? "●" : "○";
+  }
+  $("soundBtn").addEventListener("click", function () {
+    settings.sound = !settings.sound; save("sound", settings.sound); ensureAudio();
+    setToggle(this, settings.sound); if (settings.sound) tone(660, 0.3);
+  });
+  $("voiceBtn").addEventListener("click", function () {
+    settings.voice = !settings.voice; save("voice", settings.voice);
+    setToggle(this, settings.voice); if (settings.voice) say("声で読む");
+  });
+
+  /* ---------- 進め方 ---------- */
+  var player = { steps: [], idx: 0, startedAt: 0, elapsed: 0, running: false, timer: null };
+
+  function now() { return Date.now(); }
+  function curElapsed() {
+    return player.running ? player.elapsed + (now() - player.startedAt) / 1000 : player.elapsed;
+  }
+  function start() {
+    ensureAudio();
+    if (actx && actx.resume) { try { actx.resume(); } catch (e) {} }
+    player.steps = buildSteps(settings.stage);
+    show("play");
+    holdScreen();
+    goTo(0);
+    resume();
+  }
+  function goTo(i) {
+    player.idx = i; player.elapsed = 0; player.startedAt = now();
+    var s = player.steps[i];
+    if (s.kind === "ready") { tone(520, 0.25, 0.18); say("次は、" + s.it.name); }
+    else if (s.kind === "rest") { tone(440, 0.4, 0.2); say("休む"); }
+    else { tone(s.first ? 784 : 660, 0.18, 0.22); say(s.label); }
+    render();
+  }
+  function resume() {
+    player.running = true; player.startedAt = now();
+    $("pauseBtn").textContent = "止める";
+    $("play").className = "screen on";
+    if (!player.timer) player.timer = setInterval(tick, 100);
+    holdScreen();
+  }
+  function pause() {
+    player.elapsed = curElapsed(); player.running = false;
+    $("pauseBtn").textContent = "続ける";
+    $("play").className = "screen on paused";
+    render();
+  }
+  function stopAll() {
+    player.running = false;
+    if (player.timer) { clearInterval(player.timer); player.timer = null; }
+    releaseScreen();
+    if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+  }
+  function tick() {
+    if (!player.running) return;
+    var s = player.steps[player.idx];
+    if (curElapsed() >= s.dur) {
+      if (player.idx + 1 >= player.steps.length) { finish(); return; }
+      var nextItem = player.steps[player.idx + 1].item !== s.item;
+      if (nextItem) chime();
+      goTo(player.idx + 1);
+    } else {
+      render();
+    }
+  }
+  function finish() {
+    stopAll();
+    var d = new Date();
+    var date = (d.getMonth() + 1) + "月" + d.getDate() + "日";
+    save("last", { date: date, stage: settings.stage });
+    chime(); say("今日の分は済んだ");
+    show("done");
+  }
+  function itemStart(itemIdx) {
+    for (var i = 0; i < player.steps.length; i++) { if (player.steps[i].item === itemIdx) return i; }
+    return 0;
+  }
+  $("startBtn").addEventListener("click", start);
+  $("pauseBtn").addEventListener("click", function () { if (player.running) pause(); else resume(); });
+  $("nextBtn").addEventListener("click", function () {
+    var s = player.steps[player.idx];
+    if (s.item + 1 >= s.items) { finish(); return; }
+    goTo(itemStart(s.item + 1));
+  });
+  $("prevBtn").addEventListener("click", function () {
+    var s = player.steps[player.idx];
+    var head = itemStart(s.item);
+    // この組の頭から二秒以上経っていれば頭へ、そうでなければ前の組へ
+    if (player.idx === head && curElapsed() < 2 && s.item > 0) goTo(itemStart(s.item - 1));
+    else goTo(head);
+  });
+  $("quitBtn").addEventListener("click", function () { stopAll(); renderSetup(); show("setup"); });
+  $("homeBtn").addEventListener("click", function () { renderSetup(); show("setup"); });
+
+  /* ---------- 描く ---------- */
+  function nextText(i) {
+    var s = player.steps[i];
+    for (var j = i + 1; j < player.steps.length; j++) {
+      var n = player.steps[j];
+      if (n.item !== s.item) return "次は " + n.it.name;
+    }
+    return "これが最後";
+  }
+  function render() {
+    var s = player.steps[player.idx];
+    var el = Math.min(curElapsed(), s.dur);
+    var left = Math.max(0, Math.ceil(s.dur - el));
+    var frac = s.dur ? el / s.dur : 1;
+
+    $("where").textContent = (s.item + 1) + " / " + s.items + " 組目";
+    $("item").textContent = s.it.name;
+    $("note").textContent = s.it.note || "";
+
+    var isRest = s.kind !== "move";
+    $("flesh").setAttribute("class", "flesh" + (isRest ? " rest" : ""));
+    $("segs").setAttribute("class", "segs" + (isRest ? " rest" : ""));
+    $("face").className = "face" + (isRest ? " rest" : "");
+    $("ring").setAttribute("stroke-dashoffset", (RING_LEN * frac).toFixed(1));
+
+    var word = s.kind === "ready" ? "支度" : s.label;
+    var ph = $("phase");
+    ph.textContent = word;
+    // 柚子の内側に収まる大きさにする
+    var fw = $("flesh").getBoundingClientRect().width || 220;
+    ph.style.fontSize = Math.min(48, Math.floor(fw * 0.86 / word.length)) + "px";
+    $("secs").textContent = left;
+
+    var c = $("count");
+    if (s.kind === "move") {
+      var setTxt = s.sets > 1 ? (s.set.label || ("第" + (s.setIdx + 1) + "組")) + "　" : "";
+      c.innerHTML = "";
+      c.appendChild(document.createTextNode(setTxt + s.rep + " "));
+      var sm = document.createElement("small"); sm.textContent = "/ " + s.reps + " 回";
+      c.appendChild(sm);
+    } else if (s.kind === "rest") {
+      c.textContent = "手をだらりと下ろして";
+    } else {
+      c.textContent = "湯の中で手を楽に";
+    }
+    $("after").textContent = nextText(player.idx);
+  }
+
+  renderSetup();
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>
