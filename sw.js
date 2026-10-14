@@ -1,12 +1,14 @@
 // 手湯：一度開けば、電波のない風呂場でも動くように手元に置いておく
-var CACHE = "teyu-v1";
+var CACHE = "teyu-v3";
 var FILES = [
   "./",
   "index.html",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png",
-  "icon-maskable-512.png"
+  "icon-maskable-512.png",
+  "sounds/out.mp3", "sounds/back.mp3", "sounds/ready.mp3", "sounds/rest.mp3", "sounds/chime.mp3",
+  "sounds/out.wav", "sounds/back.wav", "sounds/ready.wav", "sounds/rest.wav", "sounds/chime.wav"
 ];
 
 self.addEventListener("install", function (e) {
