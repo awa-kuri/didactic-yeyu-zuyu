@@ -78,6 +78,7 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
 }
 .rule b { color: var(--hinoki); font-weight: 700; }
 .last { color: var(--yuge); font-size: 15px; margin: 0; }
+.credit { color: var(--yuge); font-size: 13px; margin: 18px 0 0; }
 
 /* ---- 手順の画面 ---- */
 #play { padding-top: 12px; }
@@ -145,6 +146,7 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
 
   <p class="rule">やっている最中の痛みは「気になる程度」まで。<br><b>翌朝の手首が悪くなっていなければ合格。</b>響いたら一段戻す。</p>
   <p class="last" id="last"></p>
+  <p class="credit">声：VOICEVOX:東北きりたん</p>
 </section>
 
 <!-- 手順 -->
@@ -289,25 +291,87 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
   }
 
   /* ---------- 音と声 ---------- */
-  // 合図の音は、録っておいた音を再生するのが先。古い閲覧器でも鳴りやすい。
-  // それが使えない端末では、その場で合成する音に切り替える。
+  // 音と声は、開いた時に全部読み込んで手元に構えておき、合図の瞬間に鳴らす（遅れを縮めるため）。
+  // 構えが間に合わない時は、ファイルをそのまま再生する。それも駄目なら合成音・端末の読み上げに切り替える。
   var SOUND_NAMES = ["out", "back", "ready", "rest", "chime"];
-  var sounds = {};
-  (function prepareSounds() {
-    var probe = null, ext = null;
+  var VOICE_NAMES = ["koede",
+    "nigiru", "hiraku", "mageru", "modosu", "sorasu", "oyayubi", "koyubi", "ue", "shita",
+    "mae", "ushiro", "osu", "yurumeru", "tojiru", "ageru", "orosu",
+    "item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9",
+    "yasumu", "sunda"];
+  var PHASE_VOICE = {
+    "握る": "nigiru", "開く": "hiraku", "曲げる": "mageru", "戻す": "modosu", "反らす": "sorasu",
+    "親指側へ": "oyayubi", "小指側へ": "koyubi", "上へ返す": "ue", "下へ返す": "shita",
+    "前へ回す": "mae", "後ろへ回す": "ushiro", "押す": "osu", "ゆるめる": "yurumeru",
+    "閉じる": "tojiru", "上げる": "ageru", "下ろす": "orosu"
+  };
+  var ITEM_VOICE = {
+    "指の握り・開き": "item1", "手首の曲げ・反らし": "item2", "手首の横振り": "item3",
+    "手のひらの返し": "item4", "親指の円": "item5", "親指を開く向きへ押す": "item6",
+    "親指を反らす向きへ押す": "item7", "輪ゴムで指を開く": "item8", "瓶を親指側へ上げる": "item9"
+  };
+  var soundExt = (function () {
+    var probe = null;
     try { probe = document.createElement("audio"); } catch (e) {}
-    if (!probe || !probe.canPlayType) return;
-    if (probe.canPlayType("audio/mpeg")) ext = "mp3";
-    else if (probe.canPlayType('audio/wav; codecs="1"') || probe.canPlayType("audio/wav")) ext = "wav";
-    if (!ext) return;
-    SOUND_NAMES.forEach(function (n) {
-      try {
-        var a = new Audio("sounds/" + n + "." + ext);
-        a.preload = "auto";
-        sounds[n] = a;
-      } catch (e) {}
-    });
+    if (!probe || !probe.canPlayType) return null;
+    if (probe.canPlayType("audio/mpeg")) return "mp3";
+    if (probe.canPlayType('audio/wav; codecs="1"') || probe.canPlayType("audio/wav")) return "wav";
+    return null;
   })();
+  function soundUrl(n) { return "sounds/" + n + "." + soundExt; }
+  function voiceUrl(n) { return "voice/" + n + ".mp3"; }
+
+  // その場で組み立てる音の土台（構えておいた音もここから鳴らす）
+  var actx = null;
+  function ensureAudio() {
+    if (actx) return;
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (C) { try { actx = new C(); } catch (e) { actx = null; } }
+  }
+  function resumeAudio() {
+    ensureAudio();
+    if (actx && actx.resume && actx.state === "suspended") { try { actx.resume(); } catch (e) {} }
+  }
+  var buffers = {};
+  function loadBuffer(key, url) {
+    if (!actx || buffers[key] || !window.XMLHttpRequest) return;
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", url, true);
+      xhr.responseType = "arraybuffer";
+      xhr.onload = function () {
+        if (xhr.status && xhr.status !== 200) return;
+        try { actx.decodeAudioData(xhr.response, function (b) { buffers[key] = b; }, function () {}); } catch (e) {}
+      };
+      xhr.send();
+    } catch (e) {}
+  }
+  function loadAll() {
+    ensureAudio();
+    if (!actx) return;
+    if (soundExt) SOUND_NAMES.forEach(function (n) { loadBuffer("s:" + n, soundUrl(n)); });
+    VOICE_NAMES.forEach(function (n) { loadBuffer("v:" + n, voiceUrl(n)); });
+  }
+  function playBuffer(key) {
+    var b = buffers[key];
+    if (!b || !actx || actx.state === "suspended") return null;
+    try {
+      var src = actx.createBufferSource();
+      src.buffer = b;
+      src.connect(actx.destination);
+      src.start(0);
+      if (window.__teyuLog) window.__teyuLog.push(key);
+      return src;
+    } catch (e) { return null; }
+  }
+
+  // 構えが間に合わない時の、ファイルの再生
+  var sounds = {};
+  if (soundExt) {
+    SOUND_NAMES.forEach(function (n) {
+      try { var a = new Audio(soundUrl(n)); a.preload = "auto"; sounds[n] = a; } catch (e) {}
+    });
+  }
   // 押した瞬間に一度だけ全部を無音で鳴らしておくと、その後は合図から鳴らせる
   var unlocked = false;
   function unlockSounds() {
@@ -328,8 +392,11 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
       } catch (e) { a.muted = false; }
     });
   }
+
+  // 合図の音
   function playSound(name) {
     if (!settings.sound) return;
+    if (playBuffer("s:" + name)) return;
     var a = sounds[name];
     if (a) {
       try {
@@ -350,12 +417,6 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     var s = SYNTH[name];
     if (s) tone(s[0], s[1], s[2]);
   }
-  var actx = null;
-  function ensureAudio() {
-    if (actx) return;
-    var C = window.AudioContext || window.webkitAudioContext;
-    if (C) { try { actx = new C(); } catch (e) { actx = null; } }
-  }
   function tone(freq, len, vol) {
     if (!settings.sound || !actx) return;
     try {
@@ -370,6 +431,45 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     } catch (e) {}
   }
   function chime() { tone(660, 0.35, 0.22); setTimeout(function () { tone(880, 0.5, 0.2); }, 180); }
+
+  // 声（VOICEVOXで作った声。無い時だけ端末の読み上げに頼る）
+  var voiceSrc = null, voiceEl = null, voiceTimer = null;
+  function stopVoice() {
+    if (voiceTimer) { clearTimeout(voiceTimer); voiceTimer = null; }
+    if (voiceSrc) { try { voiceSrc.stop(0); } catch (e) {} voiceSrc = null; }
+    if (voiceEl) { try { voiceEl.pause(); } catch (e) {} voiceEl = null; }
+    if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+  }
+  // delay：合図の音と重ならないよう、少し遅らせて話し始める
+  function speak(key, text, delay) {
+    if (!settings.voice) return;
+    stopVoice();
+    voiceTimer = setTimeout(function () {
+      voiceTimer = null;
+      if (key) {
+        // 押した直後で音の土台がまだ眠っている時は、目覚めを待ってから話す
+        if (buffers["v:" + key] && actx && actx.state === "suspended" && actx.resume) {
+          try {
+            var pr = actx.resume();
+            if (pr && pr.then) {
+              pr.then(function () { var s2 = playBuffer("v:" + key); if (s2) voiceSrc = s2; else sayTts(text); });
+              return;
+            }
+          } catch (e) {}
+        }
+        var src = playBuffer("v:" + key);
+        if (src) { voiceSrc = src; return; }
+        try {
+          var a = new Audio(voiceUrl(key));
+          voiceEl = a;
+          var p = a.play();
+          if (p && p.then) p.then(null, function () { sayTts(text); });
+          return;
+        } catch (e) {}
+      }
+      sayTts(text);
+    }, delay || 0);
+  }
   var jaVoice = null;
   function pickVoice() {
     if (!window.speechSynthesis) return;
@@ -380,15 +480,16 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     pickVoice();
     if ("onvoiceschanged" in window.speechSynthesis) window.speechSynthesis.onvoiceschanged = pickVoice;
   }
-  function say(text) {
-    if (!settings.voice || !window.speechSynthesis) return;
+  function sayTts(text) {
+    if (!window.speechSynthesis) return;
     try {
-      window.speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(text);
       u.lang = "ja-JP"; if (jaVoice) u.voice = jaVoice; u.rate = 1.0;
       window.speechSynthesis.speak(u);
     } catch (e) {}
   }
+
+  loadAll();
 
   /* ---------- 画面を消さない ---------- */
   var wakeLock = null;
@@ -446,16 +547,7 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     });
     $("total").textContent = "通して" + minutesText(totalSecs(buildSteps(settings.stage)));
     setToggle($("soundBtn"), settings.sound);
-    var vb = $("voiceBtn");
-    if (!window.speechSynthesis) {
-      // この端末には読み上げの仕組みがない
-      settings.voice = false;
-      vb.disabled = true;
-      vb.setAttribute("aria-pressed", "false");
-      vb.innerHTML = '<span class="mark">－</span>声で読む<span class="na">この端末では使えない</span>';
-    } else {
-      setToggle(vb, settings.voice);
-    }
+    setToggle($("voiceBtn"), settings.voice);
     var last = load("last", null);
     $("last").textContent = last ? "前に済ませた日：" + last.date + "（" + STAGES[last.stage].head.split("　")[0] + "）" : "";
   }
@@ -466,11 +558,12 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
   $("soundBtn").addEventListener("click", function () {
     settings.sound = !settings.sound; save("sound", settings.sound);
     setToggle(this, settings.sound);
-    if (settings.sound) { unlockSounds(); playSound("out"); }
+    if (settings.sound) { resumeAudio(); unlockSounds(); playSound("out"); }
   });
   $("voiceBtn").addEventListener("click", function () {
     settings.voice = !settings.voice; save("voice", settings.voice);
-    setToggle(this, settings.voice); if (settings.voice) say("声で読む");
+    setToggle(this, settings.voice);
+    if (settings.voice) { resumeAudio(); speak("koede", "声で読む", 0); } else { stopVoice(); }
   });
 
   /* ---------- 進め方 ---------- */
@@ -481,9 +574,8 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     return player.running ? player.elapsed + (now() - player.startedAt) / 1000 : player.elapsed;
   }
   function start() {
+    resumeAudio();
     unlockSounds();
-    ensureAudio();
-    if (actx && actx.resume) { try { actx.resume(); } catch (e) {} }
     player.steps = buildSteps(settings.stage);
     show("play");
     holdScreen();
@@ -494,9 +586,10 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
   function goTo(i, quiet) {
     player.idx = i; player.elapsed = 0; player.startedAt = now();
     var s = player.steps[i];
-    if (s.kind === "ready") { if (!quiet) playSound("ready"); say("次は、" + s.it.name); }
-    else if (s.kind === "rest") { if (!quiet) playSound("rest"); say("休む"); }
-    else { if (!quiet) playSound(s.cue); say(s.label); }
+    var gap = settings.sound ? 90 : 0;
+    if (s.kind === "ready") { if (!quiet) playSound("ready"); speak(ITEM_VOICE[s.it.name], "次は、" + s.it.name, quiet && settings.sound ? 700 : gap); }
+    else if (s.kind === "rest") { if (!quiet) playSound("rest"); speak("yasumu", "休む", gap); }
+    else { if (!quiet) playSound(s.cue); speak(PHASE_VOICE[s.label], s.label, gap); }
     render();
   }
   function resume() {
@@ -516,7 +609,7 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     player.running = false;
     if (player.timer) { clearInterval(player.timer); player.timer = null; }
     releaseScreen();
-    if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+    stopVoice();
   }
   function tick() {
     if (!player.running) return;
@@ -538,7 +631,7 @@ button:focus-visible { outline: 3px solid var(--yuzu); outline-offset: 2px; }
     $("doneRest").textContent = STAGES[settings.stage].place === "bath"
       ? "湯から上がったら、そのまま休めてよい。"
       : "手首をさすって、そのまま休めてよい。";
-    playSound("chime"); say("今日の分は済んだ");
+    playSound("chime"); speak("sunda", "今日の分は済んだ", settings.sound ? 500 : 0);
     show("done");
   }
   function itemStart(itemIdx) {
